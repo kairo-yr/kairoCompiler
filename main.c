@@ -3,7 +3,7 @@
 #include "compiler.h"
 int main(){
     
-    int res = compile_file("./test.c","./test",0);
+    int res = compile_file("./test.txt","./test",0);
     if(res == COMPILER_FILE_COMPILED_OK)
     {
         printf("Compiled fine\n");
