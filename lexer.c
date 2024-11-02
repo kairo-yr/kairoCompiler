@@ -3,6 +3,7 @@
 #include "helpers/buffer.h"
 #include <string.h>
 #include <assert.h>
+#include <ctype.h>
 
 #define LEX_GETC_IF(buffer, c, exp)     \
     for (c = peekc(); exp; c = peekc()) \
@@ -160,14 +161,14 @@ bool op_valid(char *op)
            S_EQ(op, "%");
 }
 
-void read_op_flush_back_keep_first(struct buffer* buffer)
+void read_op_flush_back_keep_first(struct buffer *buffer)
 {
     //+*
-    const char* data = buffer_ptr(buffer);
+    const char *data = buffer_ptr(buffer);
     int len = buffer->len;
-    for(int i= len-1; i>=1; i--)
+    for (int i = len - 1; i >= 1; i--)
     {
-        if(data[i]==0x00)
+        if (data[i] == 0x00)
         {
             continue;
         }
@@ -198,22 +199,22 @@ const char *read_op()
     // check if its valid like ++ and its not like +-
     if (!single_operator)
     {
-        if(!op_valid(ptr))
+        if (!op_valid(ptr))
         {
             read_op_flush_back_keep_first(buffer);
             ptr[1] = 0x00;
         }
     }
-    else if(!op_valid)
+    else if (!op_valid)
     {
-        compiler_error(lex_process->compiler, "The operator %s is not valid\n",ptr);
+        compiler_error(lex_process->compiler, "The operator %s is not valid\n", ptr);
     }
 }
 
 static void lex_new_expression()
 {
     lex_process->current_expression_count++;
-    if(lex_process->current_expression_count == 1)
+    if (lex_process->current_expression_count == 1)
     {
         lex_process->parentheses_buffer = buffer_create();
     }
@@ -222,9 +223,9 @@ static void lex_new_expression()
 static void lex_finish_expression()
 {
     lex_process->current_expression_count--;
-    if(lex_process->current_expression_count < 0)
+    if (lex_process->current_expression_count < 0)
     {
-        compiler_error(lex_process->compiler,"You closed an expression that you never opened\n");
+        compiler_error(lex_process->compiler, "You closed an expression that you never opened\n");
     }
 }
 
@@ -232,19 +233,68 @@ bool lex_is_in_expression()
 {
     return lex_process->current_expression_count > 0;
 }
+
+bool is_keyword(const char *str)
+{
+    return S_EQ(str, "auto") ||
+           S_EQ(str, "break") ||
+           S_EQ(str, "case") ||
+           S_EQ(str, "char") ||
+           S_EQ(str, "const") ||
+           S_EQ(str, "continue") ||
+           S_EQ(str, "default") ||
+           S_EQ(str, "do") ||
+           S_EQ(str, "double") ||
+           S_EQ(str, "else") ||
+           S_EQ(str, "enum") ||
+           S_EQ(str, "extern") ||
+           S_EQ(str, "float") ||
+           S_EQ(str, "for") ||
+           S_EQ(str, "goto") ||
+           S_EQ(str, "if") ||
+           S_EQ(str, "inline") ||
+           S_EQ(str, "int") ||
+           S_EQ(str, "long") ||
+           S_EQ(str, "register") ||
+           S_EQ(str, "restrict") ||
+           S_EQ(str, "return") ||
+           S_EQ(str, "short") ||
+           S_EQ(str, "signed") ||
+           S_EQ(str, "sizeof") ||
+           S_EQ(str, "static") ||
+           S_EQ(str, "struct") ||
+           S_EQ(str, "switch") ||
+           S_EQ(str, "typedef") ||
+           S_EQ(str, "union") ||
+           S_EQ(str, "unsigned") ||
+           S_EQ(str, "void") ||
+           S_EQ(str, "volatile") ||
+           S_EQ(str, "while") ||
+           S_EQ(str, "_Alignas") ||
+           S_EQ(str, "_Alignof") ||
+           S_EQ(str, "_Atomic") ||
+           S_EQ(str, "_Bool") ||
+           S_EQ(str, "_Complex") ||
+           S_EQ(str, "_Generic") ||
+           S_EQ(str, "_Imaginary") ||
+           S_EQ(str, "_Noreturn") ||
+           S_EQ(str, "_Static_assert") ||
+           S_EQ(str, "_Thread_local") ||
+           S_EQ(str,"__ignore_typecheck");
+}
 static struct token *token_make_operator_or_string()
 {
     char op = peekc();
-    if(op == '<') // <stdio.h>
+    if (op == '<') // <stdio.h>
     {
-        struct token* last_token = lexer_last_token();
-        if(token_is_keyword(last_token,"include"))
+        struct token *last_token = lexer_last_token();
+        if (token_is_keyword(last_token, "include"))
         {
-            return token_make_string('<','>');
+            return token_make_string('<', '>');
         }
     }
-    struct token* token = token_create(&(struct token){.type = TOKEN_TYPE_OPERATOR,.sval= read_op()});
-    if(op == '(')
+    struct token *token = token_create(&(struct token){.type = TOKEN_TYPE_OPERATOR, .sval = read_op()});
+    if (op == '(')
     {
         lex_new_expression();
     }
@@ -252,17 +302,45 @@ static struct token *token_make_operator_or_string()
     return token;
 }
 
-static struct token* token_make_symbol()
+static struct token *token_make_symbol()
 {
     char c = nextc();
-    if(c == ')')
+    if (c == ')')
     {
         lex_finish_expression();
     }
 
-    struct token* token = token_create(&(struct token){.type=TOKEN_TYPE_SYMBOL,. cval=c});
+    struct token *token = token_create(&(struct token){.type = TOKEN_TYPE_SYMBOL, .cval = c});
     return token;
 }
+
+static struct token *token_make_identifier_or_keyword()
+{
+    struct buffer *buffer = buffer_create();
+    char c = 0;
+    LEX_GETC_IF(buffer, c, (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_');
+
+    buffer_write(buffer, 0x00);
+
+    // check if keyword
+    if(is_keyword(buffer_ptr(buffer)))
+    {
+        return token_create(&(struct token){.type=TOKEN_TYPE_KEYWORD,.sval=buffer_ptr(buffer)});
+    }
+    return token_create(&(struct token){.type = TOKEN_TYPE_IDENTIFIER, .sval = buffer_ptr(buffer)});
+}
+
+struct token *read_special_token()
+{
+    char c = peekc();
+    if (isalpha(c) || c == '_')
+    {
+        return token_make_identifier_or_keyword();
+    }
+
+    return NULL;
+}
+
 struct token *read_next_token()
 {
     struct token *token = NULL;
@@ -281,7 +359,7 @@ struct token *read_next_token()
 
     SYMBOL_CASE:
         token = token_make_symbol();
-    break;
+        break;
 
     case '"':
         token = token_make_string('"', '"');
@@ -296,7 +374,9 @@ struct token *read_next_token()
         break;
 
     default:
-        compiler_error(lex_process->compiler, "Unexpected token\n");
+        token = read_special_token();
+        if (!token)
+            compiler_error(lex_process->compiler, "Unexpected token\n");
     }
 
     return token;
