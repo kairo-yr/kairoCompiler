@@ -11,7 +11,7 @@
         buffer_write(buffer, c);        \
         nextc();                        \
     }
-
+bool lex_is_in_expression();
 struct token *read_next_token();
 static struct lex_process *lex_process;
 static struct token tmp_token;
@@ -24,6 +24,11 @@ static char peekc()
 static char nextc()
 {
     char c = lex_process->function->next_char(lex_process);
+    if(lex_is_in_expression())
+    {
+        buffer_write(lex_process->parentheses_buffer,c);
+    }
+
     lex_process->pos.col += 1;
     if (c == '\n')
     {
@@ -53,6 +58,10 @@ struct token *token_create(struct token *_token)
 {
     memcpy(&tmp_token, _token, sizeof(struct token));
     tmp_token.pos = lex_file_position();
+    if(lex_is_in_expression())
+    {
+        tmp_token.between_brackets = buffer_ptr(lex_process->parentheses_buffer);
+    }
     return &tmp_token;
 }
 
@@ -90,10 +99,25 @@ unsigned long long read_number()
     return atoll(s);
 }
 
+ int lexer_number_type(char c)
+ {
+    int res = NUMBER_TYPE_NORMAL;
+    if(c == 'L')
+        res = NUMBER_TYPE_LONG;
+    else if (c == 'f')
+        res = NUMBER_TYPE_FLOAT;
+    return res;
+ }
 struct token *token_make_number_for_value(unsigned long number)
 {
-    return token_create(&(struct token){.type = TOKEN_TYPE_NUMBER, .llnum = number});
+    int number_type = lexer_number_type(peekc());
+    if(number_type != NUMBER_TYPE_NORMAL)
+    {
+        nextc();
+    }
+    return token_create(&(struct token){.type = TOKEN_TYPE_NUMBER, .llnum = number,.num.type=number_type});
 }
+
 struct token *token_make_number()
 {
     return token_make_number_for_value(read_number());
@@ -601,4 +625,45 @@ int lex(struct lex_process *process)
         token = read_next_token();
     }
     return LEXICAL_ANALYSIS_ALL_OK;
+}
+
+char lexer_string_buffer_next_char(struct lex_process* process)
+{
+    struct buffer* buf = lex_process_private(process);
+    return buffer_read(buf);
+}
+
+char lexer_string_buffer_peek_char(struct lex_process* process)
+{
+    struct buffer* buf = lex_process_private(process);
+    return buffer_peek(buf);
+}
+
+void lexer_string_buffer_push_char(struct lex_process* process,char c)
+{
+    struct buffer* buf = lex_process_private(process);
+    buffer_write(buf,c);
+}
+
+struct lex_process_functions lexer_string_buffer_functions = {
+    .next_char = lexer_string_buffer_next_char,
+    .peek_char = lexer_string_buffer_peek_char,
+    .push_char = lexer_string_buffer_push_char
+};
+// build token for input string
+struct lex_process* tokens_build_for_string(struct compile_process* compiler,const char* str)
+{
+    struct buffer* buffer = buffer_create();
+    buffer_printf(buffer,str);
+    struct lex_process* lex_process = lex_process_create(compiler,&lexer_string_buffer_functions,buffer);
+    if(!lex_process)
+    {
+        return NULL;
+    }
+    if(lex(lex_process)!=LEXICAL_ANALYSIS_ALL_OK)
+    {
+        return NULL;
+    }
+
+    return lex_process;
 }
