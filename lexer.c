@@ -434,6 +434,80 @@ char lex_get_escaped_char(char c)
     }
     return co;
 }
+
+void lexer_pop_token()
+{
+    vector_pop(lex_process->token_vec);
+}
+
+bool is_hex_char(char c)
+{
+     c = tolower(c);
+    return (c>='0' && c<='9') || (c>='a' && c<='f');
+}
+
+const char* read_hex_number_str()
+{
+    struct buffer* buffer = buffer_create();
+    char c = peekc(); 
+    LEX_GETC_IF(buffer,c,is_hex_char(c));
+    buffer_write(buffer,0x00);
+    return buffer_ptr(buffer);
+}
+
+struct token* token_make_special_number_hexadecimal()
+{
+    //skip the x
+    nextc();
+    unsigned long number = 0;
+    const char* number_str = read_hex_number_str();
+    number = strtol(number_str,0,16);
+    return token_make_number_for_value(number);
+}
+
+void lexer_validate_binary_string(const char* str)
+{
+    size_t len = strlen(str);
+    for(int i=0;i<len;i++)
+    {
+        if(str[i]!='0' && str[i]!='1')
+        {
+            compiler_error(lex_process->compiler,"Invalid Binary number\n");
+        }
+    }
+}
+struct token* token_make_special_number_binary()
+{
+    //skip the b
+    nextc();
+    unsigned long number = 0;
+    const char* number_str = read_number_str();
+    lexer_validate_binary_string(number_str);
+    number = strtol(number_str,0,2);
+
+    return token_make_number_for_value(number);
+}
+struct token* token_make_special_number()
+{
+     struct token* token =NULL;
+     struct token* last_token = lexer_last_token(); 
+    if(!last_token || !(last_token->type=TOKEN_TYPE_NUMBER && last_token->llnum == 0))
+    {
+        return token_make_identifier_or_keyword();
+    }
+     lexer_pop_token();
+     char c = peekc();
+     if(c == 'x')
+     {
+        token = token_make_special_number_hexadecimal();
+     }
+     else if(c == 'b')
+     {
+        token = token_make_special_number_binary();
+     }
+
+     return token;
+}
 struct token* token_make_quote()
 {
      assert_next_char('\'');
@@ -477,12 +551,22 @@ struct token *read_next_token()
         token = token_make_symbol();
         break;
 
+    case 'b':
+        token = token_make_special_number();
+        break;
+
+    case 'x':
+        token = token_make_special_number();
+        break;
+
     case '\'':
         token = token_make_quote();
         break;
+    
     case '"':
         token = token_make_string('"', '"');
         break;
+    
     case ' ':
     case '\t':
         token = handle_whitespace();

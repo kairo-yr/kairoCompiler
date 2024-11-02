@@ -7,4 +7,6 @@
 /* multi
     line 
     comment */ 
-    'a' $
+    'a' 
+    0xef 
+    0b01000001 $
