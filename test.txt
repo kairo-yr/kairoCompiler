@@ -1,1 +1,9 @@
-50+20 ++ 7*7 (50+20) hello int long [#] $
+50+20
+++ 
+7*7
+(50+20)
+   hello int long [#] 
+// comment
+/* multi
+    line 
+    comment */ $
