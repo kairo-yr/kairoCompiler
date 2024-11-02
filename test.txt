@@ -6,4 +6,5 @@
 // comment
 /* multi
     line 
-    comment */ $
+    comment */ 
+    'a' $
