@@ -1,12 +1,1 @@
-(50L+20)
-++ 
-7*7
-(50+20)
-   hello int long [#] 
-// comment
-/* multi
-    line 
-    comment */ 
-    'a' 
-    0xef 
-    0b01000001 $
+5467 abcd $
